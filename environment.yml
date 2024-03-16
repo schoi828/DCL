@@ -1,0 +1,10 @@
+name: test4
+channels:
+  - pytorch
+  - nvidia
+dependencies:
+  - python=3.9
+  - pytorch-cuda=11.7
+  - pytorch=1.13
+  - torchvision=0.14
+  - pip>=22
