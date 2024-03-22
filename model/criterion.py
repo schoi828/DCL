@@ -1,47 +1,31 @@
 import torch
 import torch.nn as nn
-from einops import repeat, rearrange
+from einops import rearrange
 import torch.nn.functional as F
-import numpy as np
-
-def similarity_matrix(x, no_std=False):
-    ''' Calculate adjusted cosine similarity matrix of size x.size(0) x x.size(0). '''
-    if x.dim() == 4:
-        if not no_std and x.size(1) > 3 and x.size(2) > 1:
-            z = x.view(x.size(0), x.size(1), -1)
-            x = z.std(dim=2)
-        else:
-            x = x.view(x.size(0),-1)
-    xc = x - x.mean(dim=1).unsqueeze(1)
-    xn = xc / (1e-8 + torch.sqrt(torch.sum(xc**2, dim=1))).unsqueeze(1)
-    R = xn.matmul(xn.transpose(1,0)).clamp(-1,1)
-    return R
-
-class Normalize(nn.Module):
-    def __init__(self, dim = 1, power=2):
-        super().__init__()
-        self.power = power
-        self.dim = dim
-
-    def forward(self, x):
-        norm = x.pow(self.power).sum(self.dim, keepdim=True).pow(1. / self.power)
-        out = x.div(norm + 1e-7)
-        return out
 
 #Dictionary Contrastive Loss
-def emb_pred_loss(latents,labels,emb_dict, patch=0,temperature=1,perturb=False,norm=False):
+def dict_cont_loss(latents, labels, emb_dict, patch=0,temperature=1,norm=False):
     
+    #cosine similarity
     if norm:
         emb_dict = F.normalize(emb_dict,dim=1)
         latents = F.normalize(latents,dim=1)
+    
+    #for convolutional networks
     if len(latents.shape) == 4:
-        latents = rearrange(latents,"b c h w -> (h w) b c") #latents.flatten(2).permute(2,0,1) #seq, b, ch
+        latents = rearrange(latents,"b c h w -> (h w) b c") #patch (k), batch, channel
+    
+    #for MLP-Mixer, ViT 
     elif len(latents.shape) == 3:
-        latents = rearrange(latents,"b c p -> p b c") #latents.flatten(2).permute(2,0,1) #seq, b, ch
+        latents = rearrange(latents,"b c p -> p b c") #patch (k), b, ch
+    
+    #for FC networks
     elif patch>0:
-        latents = rearrange(latents,"b (p c) -> p b c", p=patch)
+        latents = rearrange(latents,"b (p c) -> p b c", p=patch) #patch (k), b, ch
     else:
         latents = latents.unsqueeze(1)
+
+    #pool_l
     if emb_dict.shape[-1] != latents.shape[-1]:
         emb_dict = F.adaptive_avg_pool1d(emb_dict, latents.shape[-1])
 
@@ -49,8 +33,10 @@ def emb_pred_loss(latents,labels,emb_dict, patch=0,temperature=1,perturb=False,n
         pred = torch.matmul(latents,emb_dict.T).mean(0)
     else:
         pred = torch.matmul(latents,emb_dict.transpose(1,2)).squeeze(1)
+    
     pred/=temperature
     pred_loss = 0
+    
     if labels is not None:
         pred_loss = F.cross_entropy(pred, labels)
        

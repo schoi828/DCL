@@ -1,4 +1,4 @@
-name: test4
+name: DCL
 channels:
   - pytorch
   - nvidia

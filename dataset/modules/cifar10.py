@@ -27,7 +27,7 @@ class CIFAR10DataModule(DataModule):
         pin_memory: bool = True,
         shuffle: bool = True,
         classes_per_batch:int = 0,
-        nprocs=None
+        nprocs:tuple=(1,0)
     ):
         super().__init__(dataset_dir,
         normalize,
